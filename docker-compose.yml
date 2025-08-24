@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # Nginx сервер
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/html:/var/www/html
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - php
+      - backend1
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # PHP сервер
+  php:
+    image: php:8.2-fpm
+    container_name: php
+    volumes:
+      - ./php:/var/www/html
+      - ./php/php.ini:/usr/local/etc/php/php.ini
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # MariaDB база данных
+  mariadb:
+    image: mariadb:10.6
+    container_name: mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: app_db
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: app_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./mariadb/init:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Backend сервис
+  backend1:
+    image: node:18-alpine
+    container_name: backend1
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    ports:
+      - "3000:3000"
+    command: npm start
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - mariadb
+
+  # phpMyAdmin для управления БД (опционально)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: rootpassword
+    ports:
+      - "8080:80"
+    depends_on:
+      - mariadb
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  mariadb_data:
+
+networks:
+  app-network:
+    driver: bridge
